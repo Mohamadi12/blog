@@ -10,10 +10,10 @@ export const signUp = async (req, res, next) => {
   session.startTransaction();
 
   try {
-    const { name, email, password } = req.body;
+    const { fullname, email, password, username } = req.body.personal_info;
 
     // Chef if all fields are provided
-    if (!name || !email || !password) {
+    if (!fullname || !email || !password) {
       const error = new Error("All fields are required");
       error.statusCode = 400;
       throw error;
@@ -30,7 +30,7 @@ export const signUp = async (req, res, next) => {
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      const error = new Error("User already exists");
+      const error = new Error("Personal Info already exists");
       error.statusCode = 409;
       throw error;
     }
@@ -40,7 +40,16 @@ export const signUp = async (req, res, next) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUsers = await User.create(
-      [{ name, email, password: hashedPassword }],
+      [
+        {
+          personal_info: {
+            fullname,
+            email,
+            password: hashedPassword,
+            username,
+          },
+        },
+      ],
       { session }
     );
 
@@ -53,7 +62,7 @@ export const signUp = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: "User created successfully",
+      message: "Personal Info created successfully",
       data: {
         token,
         user: newUsers[0],
@@ -68,17 +77,26 @@ export const signUp = async (req, res, next) => {
 
 export const signIn = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body.personal_info;
 
-    const user = await User.findOne({ email });
+    if (!email || !password) {
+      const error = new Error("Email and password are required");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const user = await User.findOne({ "personal_info.email": email });
 
     if (!user) {
-      const error = new Error("User not found");
+      const error = new Error("Personal Info not found");
       error.statusCode = 404;
       throw error;
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      password,
+      user.personal_info.password
+    );
 
     if (!isPasswordValid) {
       const error = new Error("Invalid password");
@@ -92,7 +110,7 @@ export const signIn = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "User signed in successfully",
+      message: "Personal Info signed in successfully",
       data: {
         token,
         user,
@@ -103,4 +121,9 @@ export const signIn = async (req, res, next) => {
   }
 };
 
-export const signOut = async (req, res, next) => {};
+export const signOut = async (req, res, next) => {
+  res.clearCookie("access_token");
+  res
+    .status(200)
+    .json({ success: true, message: "User signed out successfully" });
+};
